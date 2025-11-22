@@ -774,7 +774,18 @@ class BeaverGame extends Phaser.Scene {
         }
         // stop all active tweens (logs movement)
         this.tweens.killAll();
+        
+        var previousHighscore = EPT.Storage.getHighscore('EPT-highscore');
         EPT.Storage.setHighscore('EPT-highscore', this.score);
+        
+        // MiniApp integration: mint NFT badge on new high score
+        if(window.miniapp && window.miniapp.mintBadge && this.score > previousHighscore) {
+            try {
+                window.miniapp.mintBadge(this.score);
+            } catch(e) {
+                console.warn('Failed to mint badge:', e);
+            }
+        }
 
         // use same font style as gameplay score for consistency
         var fontScore = { font: '38px '+EPT.text['FONT'], fill: '#ffde00', stroke: '#000', strokeThickness: 6 };

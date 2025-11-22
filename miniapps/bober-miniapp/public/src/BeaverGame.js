@@ -775,7 +775,7 @@ class BeaverGame extends Phaser.Scene {
         // stop all active tweens (logs movement)
         this.tweens.killAll();
         
-        var previousHighscore = EPT.Storage.getHighscore('EPT-highscore');
+        var previousHighscore = EPT.Storage.getFloat('EPT-highscore') || 0;
         EPT.Storage.setHighscore('EPT-highscore', this.score);
         
         // MiniApp integration: mint NFT badge on new high score
