@@ -8,11 +8,14 @@ module.exports = {
   networks: {
     celo: {
       url: CELO_FORNO_RPC || 'https://forno.celo.org',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+      timeout: 60000
     },
     alfajores: {
       url: process.env.ALF_RPC || 'https://alfajores-forno.celo-testnet.org',
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+      timeout: 60000,
+      chainId: 44787
     }
   }
 };
