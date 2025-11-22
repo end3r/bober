@@ -1,0 +1,27 @@
+{
+  "name": "bober-miniapp",
+  "version": "1.0.0",
+  "description": "Minimal Celo Farcaster MiniApp for Bober game with tips and NFT badges",
+  "main": "public/index.html",
+  "scripts": {
+    "dev": "npx http-server public -p 8080 -o",
+    "compile": "hardhat compile",
+    "deploy:alfajores": "hardhat run scripts/deploy.js --network alfajores",
+    "deploy:celo": "hardhat run scripts/deploy.js --network celo"
+  },
+  "keywords": ["celo", "farcaster", "miniapp", "web3", "game"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@openzeppelin/contracts": "^4.9.3",
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.17.2",
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "wagmi": "^2.5.0",
+    "viem": "^2.7.0",
+    "@tanstack/react-query": "^5.28.0"
+  }
+}

@@ -64,10 +64,10 @@ class BeaverGame extends Phaser.Scene {
         // particles (small leaves/bubbles) drifting down the river
         // ensure particle texture was preloaded in Preloader
         if(this.textures.exists('particle')) {
-            // Create emitter via add.particles(texture, config) to avoid using removed createEmitter API
-            this.particles = this.add.particles('particle', {
-                x: { min: this.riverLeft + 8, max: this.riverRight - 8 },
-                y: { min: -40, max: -10 },
+            // Create particle emitters using Phaser 3.60+ API
+            this.particles = this.add.particles(this.riverLeft + 8, -25, 'particle', {
+                x: { min: 0, max: this.riverRight - this.riverLeft - 16 },
+                y: { min: -15, max: 15 },
                 lifespan: { min: 4000, max: 9000 },
                 speedY: { min: 30, max: 90 },
                 speedX: { min: -30, max: 30 },
@@ -76,41 +76,51 @@ class BeaverGame extends Phaser.Scene {
                 angle: { min: -30, max: 30 },
                 rotate: { min: -180, max: 180 },
                 frequency: 300,
-                quantity: 1,
                 blendMode: 'NORMAL'
             });
-            // set depth on the particle manager so particles appear above the shimmer
             this.particles.setDepth(6);
-            // debris layers (parallax): slow layer and fast layer moving with the water
-            this.debrisSlow = this.add.particles('particle', {
-                x: { min: this.riverLeft + 12, max: this.riverRight - 12 },
-                y: { min: -40, max: EPT.world.height },
-                lifespan: { min: 10000, max: 16000 },
-                speedY: { min: -90, max: -40 },
-                speedX: { min: -30, max: 30 },
-                scale: { start: 0.9, end: 1.2 },
-                alpha: { start: 1, end: 0.35 },
+
+            // debris layers (spawn at top like logs, flow downward, stay in river)
+            this.debrisSlow = this.add.particles(this.riverLeft + 12, -30, 'particle', {
+                x: { min: 0, max: this.riverRight - this.riverLeft - 24 },
+                y: 0,
+                lifespan: { min: 8000, max: 12000 },
+                speedY: { min: 50, max: 90 },
+                speedX: { min: -20, max: 20 },
+                scale: { start: 0.7, end: 0.9 },
+                alpha: { start: 0.8, end: 0.3 },
                 rotate: { min: -40, max: 40 },
-                frequency: 450,
-                quantity: 1,
+                frequency: 600,
                 blendMode: 'NORMAL'
             });
             this.debrisSlow.setDepth(7);
 
-            this.debrisFast = this.add.particles('particle', {
-                x: { min: this.riverLeft + 12, max: this.riverRight - 12 },
-                y: { min: -40, max: EPT.world.height },
-                lifespan: { min: 6000, max: 10000 },
-                speedY: { min: -180, max: -100 },
-                speedX: { min: -40, max: 40 },
-                scale: { start: 0.6, end: 1.0 },
-                alpha: { start: 1, end: 0.45 },
+            this.debrisFast = this.add.particles(this.riverLeft + 12, -30, 'particle', {
+                x: { min: 0, max: this.riverRight - this.riverLeft - 24 },
+                y: 0,
+                lifespan: { min: 5000, max: 8000 },
+                speedY: { min: 120, max: 200 },
+                speedX: { min: -30, max: 30 },
+                scale: { start: 0.5, end: 0.8 },
+                alpha: { start: 0.9, end: 0.4 },
                 rotate: { min: -180, max: 180 },
-                frequency: 300,
-                quantity: 1,
+                frequency: 400,
                 blendMode: 'NORMAL'
             });
             this.debrisFast.setDepth(8);
+
+            // dedicated splash emitter for lane changes (no auto-emit)
+            this.splashEmitter = this.add.particles(0, 0, 'particle', {
+                speed: { min: 100, max: 250 },
+                angle: { min: 0, max: 360 },
+                scale: { start: 1.5, end: 0.1 },
+                alpha: { start: 1, end: 0 },
+                lifespan: { min: 400, max: 700 },
+                blendMode: 'ADD',
+                tint: 0x87CEEB,
+                frequency: -1
+            });
+            this.splashEmitter.setDepth(9);
         }
 
         // UI
@@ -540,27 +550,55 @@ class BeaverGame extends Phaser.Scene {
         if(!this.isRunning) return;
         // toggle side
         this.beaverSide = this.beaverSide ? 0 : 1;
+        var startX = this.beaver.x;
         var targetX = this.lanes[this.beaverSide];
-        this.tweens.add({ targets: this.beaver, x: targetX, duration: 120, ease: 'Sine.easeOut' });
+        var distance = Math.abs(targetX - startX);
+        var duration = 120;
+        
+        this.tweens.add({ targets: this.beaver, x: targetX, duration: duration, ease: 'Sine.easeOut' });
         EPT.Sfx.play('click');
-        // do NOT award points for tapping/switching sides anymore;
-        // points are only awarded when logs pass safely (handled in update())
 
         // make game a little harder but keep it fair
         this.logSpeed += 6; // smaller per-switch bump
 
-        // emit splash/debris burst at the beaver position to add juiciness
-        var sx = this.beaver.x;
-        var sy = this.beaver.y + (this.beaver.displayHeight ? this.beaver.displayHeight/2 : 8);
-        if(this.particles) {
-            try { this.particles.emitParticleAt(sx, sy, 10); } catch(e) {}
-        }
-        if(this.debrisFast) {
-            try { this.debrisFast.emitParticleAt(sx, sy, 6); } catch(e) {}
-        }
-        if(this.debrisSlow) {
-            try { this.debrisSlow.emitParticleAt(sx, sy, 4); } catch(e) {}
-        }
+        // emit particles along the movement path (middle of body, underneath)
+        var sy = this.beaver.y + (this.beaver.displayHeight ? this.beaver.displayHeight * 0.3 : 10);
+        var numSteps = Math.ceil(distance / 20); // emit every ~20 pixels
+        var step = 0;
+        
+        // create a timer to spawn particles along the path as beaver moves
+        var pathTimer = this.time.addEvent({
+            delay: duration / numSteps,
+            repeat: numSteps - 1,
+            callback: function() {
+                var t = step / (numSteps - 1 || 1);
+                var currentX = startX + (targetX - startX) * t;
+                
+                // spawn smaller splashes along the path
+                if(this.splashEmitter) {
+                    try { this.splashEmitter.explode(5, currentX, sy); } catch(e) {}
+                }
+                if(this.particles) {
+                    try { this.particles.explode(3, currentX, sy); } catch(e) {}
+                }
+                
+                step++;
+            },
+            callbackScope: this
+        });
+        
+        // final burst at destination
+        this.time.delayedCall(duration, function() {
+            if(this.splashEmitter) {
+                try { this.splashEmitter.explode(20, targetX, sy); } catch(e) {}
+            }
+            if(this.debrisFast) {
+                try { this.debrisFast.explode(8, targetX, sy); } catch(e) {}
+            }
+            if(this.debrisSlow) {
+                try { this.debrisSlow.explode(5, targetX, sy); } catch(e) {}
+            }
+        }, [], this);
     }
 
     increaseDifficulty() {
@@ -605,43 +643,87 @@ class BeaverGame extends Phaser.Scene {
         this.tweens.killAll();
         EPT.Storage.setHighscore('EPT-highscore', this.score);
 
-        // show a gameover overlay similar to other scenes
-        var fontScoreWhite =  { font: '38px '+EPT.text['FONT'], fill: '#000', stroke: '#ffde00', strokeThickness: 5 };
-        var fontTitle = { font: '48px '+EPT.text['FONT'], fill: '#000', stroke: '#ffde00', strokeThickness: 10 };
+        // use same font style as gameplay score for consistency
+        var fontScore = { font: '38px '+EPT.text['FONT'], fill: '#ffde00', stroke: '#000', strokeThickness: 6 };
+        var fontTitle = { font: '48px '+EPT.text['FONT'], fill: '#ffde00', stroke: '#000', strokeThickness: 10 };
 
         this.screenGameoverGroup = this.add.group();
-        this.screenGameoverBg = this.add.sprite(0, 0, 'overlay');
-        this.screenGameoverBg.setAlpha(0.95);
+        
+        // create grass/water background matching the game screen
+        var W = EPT.world.width;
+        var H = EPT.world.height;
+        var g = this.make.graphics({x:0,y:0,add:false});
+        var tile = 8;
+        var riverWidth = Math.floor(W * 0.6);
+        var sideWidth = Math.floor((W - riverWidth) / 2);
+        var leftBound = sideWidth;
+        var rightBound = leftBound + riverWidth;
+
+        for(var y=0; y<H; y+=tile) {
+            for(var x=0; x<W; x+=tile) {
+                if(x < leftBound || x >= rightBound) {
+                    // grass
+                    var greens = [0x2E8B57, 0x228B22, 0x32CD32, 0x3CB371];
+                    var color = greens[Phaser.Math.Between(0, greens.length-1)];
+                    g.fillStyle(color, 1);
+                } else {
+                    // river
+                    var blues = [0x1E90FF, 0x00BFFF, 0x4682B4, 0x6495ED];
+                    var color = blues[Phaser.Math.Between(0, blues.length-1)];
+                    g.fillStyle(color, 1);
+                }
+                g.fillRect(x, y, tile, tile);
+            }
+        }
+        g.generateTexture('gameover-bg', W, H);
+        g.destroy();
+        
+        this.screenGameoverBg = this.add.image(0, 0, 'gameover-bg');
         this.screenGameoverBg.setOrigin(0, 0);
-        // ensure background fills the screen
-        try { this.screenGameoverBg.displayWidth = EPT.world.width; this.screenGameoverBg.displayHeight = EPT.world.height; } catch(e) {}
+        
         this.screenGameoverText = this.add.text(EPT.world.centerX, 100, EPT.text['gameplay-gameover'], fontTitle);
         this.screenGameoverText.setOrigin(0.5,0);
-        // Replace sliding Buttons with a single visible interactive text labeled 'reply'
-        this.screenGameoverReply = this.add.text(EPT.world.centerX, EPT.world.height-100, 'Try again!', { font: '36px '+EPT.text['FONT'], fill: '#ffffff', stroke: '#000', strokeThickness: 6 });
+        
+        // score display with background panel matching gameplay UI
+        this.screenGameoverScore = this.add.text(EPT.world.centerX, 250, EPT.text['gameplay-score']+this.score, fontScore);
+        this.screenGameoverScore.setOrigin(0.5,0.5);
+        
+        // background panel for score
+        var padX = 12, padY = 8;
+        var rectX = this.screenGameoverScore.x - this.screenGameoverScore.width/2 - padX;
+        var rectY = this.screenGameoverScore.y - this.screenGameoverScore.height/2 - padY;
+        var rectW = this.screenGameoverScore.width + padX*2;
+        var rectH = this.screenGameoverScore.height + padY*2;
+        this.screenGameoverScoreBg = this.add.rectangle(rectX, rectY, rectW, rectH, 0x000000).setOrigin(0,0);
+        this.screenGameoverScoreBg.setStrokeStyle(6, 0xffde00);
+        
+        // Try again button
+        this.screenGameoverReply = this.add.text(EPT.world.centerX, EPT.world.height-100, 'Try again!', { font: '36px '+EPT.text['FONT'], fill: '#ffde00', stroke: '#000', strokeThickness: 6 });
         this.screenGameoverReply.setOrigin(0.5, 1);
         this.screenGameoverReply.setInteractive({ useHandCursor: true });
         this.screenGameoverReply.on('pointerdown', () => { this.stateRestart(); });
-        this.screenGameoverScore = this.add.text(EPT.world.centerX, 300, EPT.text['gameplay-score']+this.score, fontScoreWhite);
-        this.screenGameoverScore.setOrigin(0.5,0.5);
-        // add to group
+        
+        // add to group in correct order
         this.screenGameoverGroup.add(this.screenGameoverBg);
-        this.screenGameoverGroup.add(this.screenGameoverText);
-        // add our single reply text instead of the two buttons
-        this.screenGameoverGroup.add(this.screenGameoverReply);
+        this.screenGameoverGroup.add(this.screenGameoverScoreBg);
         this.screenGameoverGroup.add(this.screenGameoverScore);
-        // make sure overlay and its children render above everything
+        this.screenGameoverGroup.add(this.screenGameoverText);
+        this.screenGameoverGroup.add(this.screenGameoverReply);
+        
+        // set depths
         var overlayDepth = 200;
         this.screenGameoverBg.setDepth(overlayDepth);
-        this.screenGameoverText.setDepth(overlayDepth+1);
-        if(this.screenGameoverReply && this.screenGameoverReply.setDepth) this.screenGameoverReply.setDepth(overlayDepth+1);
-        this.screenGameoverScore.setDepth(overlayDepth+1);
+        this.screenGameoverScoreBg.setDepth(overlayDepth+1);
+        this.screenGameoverScore.setDepth(overlayDepth+2);
+        this.screenGameoverText.setDepth(overlayDepth+2);
+        this.screenGameoverReply.setDepth(overlayDepth+2);
         this.screenGameoverGroup.setVisible(true);
 
         EPT.fadeOutIn(function(self){
             self.buttonPause && (self.buttonPause.input && (self.buttonPause.input.enabled = false));
         }, this);
-        // gentle idle tween for the reply text so it's noticeable
+        
+        // gentle idle tween for the reply text
         try {
             this.tweens.add({ targets: this.screenGameoverReply, y: this.screenGameoverReply.y - 8, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
         } catch(e) {}
