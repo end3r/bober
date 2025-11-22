@@ -613,28 +613,38 @@ class BeaverGame extends Phaser.Scene {
         this.screenGameoverBg = this.add.sprite(0, 0, 'overlay');
         this.screenGameoverBg.setAlpha(0.95);
         this.screenGameoverBg.setOrigin(0, 0);
+        // ensure background fills the screen
+        try { this.screenGameoverBg.displayWidth = EPT.world.width; this.screenGameoverBg.displayHeight = EPT.world.height; } catch(e) {}
         this.screenGameoverText = this.add.text(EPT.world.centerX, 100, EPT.text['gameplay-gameover'], fontTitle);
         this.screenGameoverText.setOrigin(0.5,0);
-        this.screenGameoverBack = new Button(100, EPT.world.height-100, 'button-mainmenu', this.stateBack, this);
-        this.screenGameoverBack.setOrigin(0,1);
-        this.screenGameoverRestart = new Button(EPT.world.width-100, EPT.world.height-100, 'button-restart', this.stateRestart, this);
-        this.screenGameoverRestart.setOrigin(1,1);
+        // Replace sliding Buttons with a single visible interactive text labeled 'reply'
+        this.screenGameoverReply = this.add.text(EPT.world.centerX, EPT.world.height-100, 'Try again!', { font: '36px '+EPT.text['FONT'], fill: '#ffffff', stroke: '#000', strokeThickness: 6 });
+        this.screenGameoverReply.setOrigin(0.5, 1);
+        this.screenGameoverReply.setInteractive({ useHandCursor: true });
+        this.screenGameoverReply.on('pointerdown', () => { this.stateRestart(); });
         this.screenGameoverScore = this.add.text(EPT.world.centerX, 300, EPT.text['gameplay-score']+this.score, fontScoreWhite);
         this.screenGameoverScore.setOrigin(0.5,0.5);
+        // add to group
         this.screenGameoverGroup.add(this.screenGameoverBg);
         this.screenGameoverGroup.add(this.screenGameoverText);
-        this.screenGameoverGroup.add(this.screenGameoverBack);
-        this.screenGameoverGroup.add(this.screenGameoverRestart);
+        // add our single reply text instead of the two buttons
+        this.screenGameoverGroup.add(this.screenGameoverReply);
         this.screenGameoverGroup.add(this.screenGameoverScore);
-        this.screenGameoverGroup.toggleVisible();
+        // make sure overlay and its children render above everything
+        var overlayDepth = 200;
+        this.screenGameoverBg.setDepth(overlayDepth);
+        this.screenGameoverText.setDepth(overlayDepth+1);
+        if(this.screenGameoverReply && this.screenGameoverReply.setDepth) this.screenGameoverReply.setDepth(overlayDepth+1);
+        this.screenGameoverScore.setDepth(overlayDepth+1);
+        this.screenGameoverGroup.setVisible(true);
 
         EPT.fadeOutIn(function(self){
             self.buttonPause && (self.buttonPause.input && (self.buttonPause.input.enabled = false));
         }, this);
-        this.screenGameoverBack.x = -this.screenGameoverBack.width-20;
-        this.tweens.add({targets: this.screenGameoverBack, x: 100, duration: 500, delay: 250, ease: 'Back'});
-        this.screenGameoverRestart.x = EPT.world.width+this.screenGameoverRestart.width+20;
-        this.tweens.add({targets: this.screenGameoverRestart, x: EPT.world.width-100, duration: 500, delay: 250, ease: 'Back'});
+        // gentle idle tween for the reply text so it's noticeable
+        try {
+            this.tweens.add({ targets: this.screenGameoverReply, y: this.screenGameoverReply.y - 8, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        } catch(e) {}
     }
 
     stateBack() {
