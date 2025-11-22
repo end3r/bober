@@ -1,7 +1,7 @@
 {
-    "name": "Enclave Phaser Template",
-    "short_name": "EPT",
-    "description": "Mobile template for HTML5 games created using the Phaser game engine.",
+    "name": "Bober River Flow",
+    "short_name": "Bober",
+    "description": "Bober River Flow - a pixel-style river dodge game",
     "icons": [
         {
             "src": "img/icons/icon-32.png",

@@ -18,12 +18,17 @@ class Preloader extends Phaser.Scene {
 
 		var resources = {
 			'image': [
-				['title', 'img/title.png']
+				['title', 'img/title.png'],
+				['particle', 'img/particle.png']
 			],
 			'spritesheet': [
 				['button-start', 'img/button-start.png', {frameWidth:180,frameHeight:180}],
 				['button-settings', 'img/button-settings.png', {frameWidth:80,frameHeight:80}],
 				['loader', 'img/loader.png', {frameWidth:45,frameHeight:45}]
+			]
+			,'audio': [
+				['sound-click', ['sfx/audio-button.m4a','sfx/audio-button.mp3','sfx/audio-button.ogg']],
+				['music-theme', ['sfx/music-bitsnbites-liver.m4a','sfx/music-bitsnbites-liver.mp3','sfx/music-bitsnbites-liver.ogg']]
 			]
 		};
 		for(var method in resources) {
@@ -34,6 +39,6 @@ class Preloader extends Phaser.Scene {
 		};
     }
     create() {
-		EPT.fadeOutScene('MainMenu', this);
+		EPT.fadeOutScene('BeaverGame', this);
 	}
 }
