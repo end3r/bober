@@ -18,7 +18,7 @@ class BeaverGame extends Phaser.Scene {
         this.score = 0;
         // make game slightly more challenging: shorter base spawn interval
         this.spawnInterval = 900; // ms between logs (was 1200)
-        this.logSpeed = 220; // pixels per second baseline (small bump)
+        this.logSpeed = 264; // pixels per second baseline (220 * 1.2 = 264)
         this.baseLogSpeed = this.logSpeed; // remember baseline for spacing calculations
         this.isRunning = true;
         // create simple pixel-style textures for beaver (idle + swim frames) and log
@@ -121,6 +121,35 @@ class BeaverGame extends Phaser.Scene {
                 frequency: -1
             });
             this.splashEmitter.setDepth(9);
+
+            // trail emitters - two emitters on both sides of beaver body
+            this.trailEmitterLeft = this.add.particles(0, 0, 'particle', {
+                speedY: { min: 60, max: 120 },
+                speedX: { min: -40, max: 40 },
+                scale: { start: 1.5, end: 0.3 },
+                alpha: { start: 0.5, end: 0 },
+                lifespan: { min: 800, max: 1400 },
+                blendMode: 'ADD',
+                tint: 0x4169E1,
+                frequency: 25,
+                quantity: 1
+            });
+            this.trailEmitterLeft.setDepth(5);
+            this.trailEmitterLeft.startFollow(this.beaver, -this.beaver.displayWidth * 0.35, this.beaver.displayHeight * 0.35);
+            
+            this.trailEmitterRight = this.add.particles(0, 0, 'particle', {
+                speedY: { min: 60, max: 120 },
+                speedX: { min: -40, max: 40 },
+                scale: { start: 1.5, end: 0.3 },
+                alpha: { start: 0.5, end: 0 },
+                lifespan: { min: 800, max: 1400 },
+                blendMode: 'ADD',
+                tint: 0x4169E1,
+                frequency: 25,
+                quantity: 1
+            });
+            this.trailEmitterRight.setDepth(5);
+            this.trailEmitterRight.startFollow(this.beaver, this.beaver.displayWidth * 0.35, this.beaver.displayHeight * 0.35);
         }
 
         // UI
@@ -140,6 +169,15 @@ class BeaverGame extends Phaser.Scene {
         this.scoreBg.setDepth(50);
         this.textScore.setDepth(51);
 
+        // speed lines for near-miss effect
+        this.speedLines = this.add.group();
+        for(var i = 0; i < 8; i++) {
+            var line = this.add.rectangle(0, 0, Phaser.Math.Between(100, 300), 3, 0xffffff, 0);
+            line.setOrigin(0, 0.5);
+            line.setDepth(45);
+            this.speedLines.add(line);
+        }
+
         // controls
         this.input.keyboard.on('keydown-SPACE', this.switchSide, this);
         this.input.on('pointerdown', this.switchSide, this);
@@ -158,6 +196,9 @@ class BeaverGame extends Phaser.Scene {
         this.initialEasyStart = (this.time && this.time.now) ? this.time.now : Date.now();
         this.time.delayedCall(this.initialEasyDuration, function(){ this.isInitialEasy = false; }, [], this);
 
+        // track last spawned lanes to prevent more than 3 consecutive logs on same side
+        this.laneHistory = [];
+
         // spawn first log immediately and set up the manual scheduler for spawn timing
         this.spawnLog();
         // scheduled delayed call for next spawn (will be created by scheduleNextSpawn)
@@ -165,7 +206,7 @@ class BeaverGame extends Phaser.Scene {
         // spawn ramp: from 1000ms down to 300ms over 15s
         this.spawnStartInterval = 2000; // start at 2000ms (2 seconds)
         this.spawnEndInterval = 300;
-        this.spawnRampDuration = 30000; // 30 seconds
+        this.spawnRampDuration = 20000; // 20 seconds
         this.spawnInterval = this.spawnStartInterval;
         this.spawnRampTick = 200; // tick every 200ms to update spawnInterval
         this.spawnRampTicks = Math.ceil(this.spawnRampDuration / this.spawnRampTick);
@@ -193,18 +234,55 @@ class BeaverGame extends Phaser.Scene {
         // schedule the first next spawn
         this.scheduleNextSpawn();
 
-        // difficulty timer: smoothly ramp log speed over a 20-30s window
+        // difficulty timer: smoothly ramp log speed over a 15-20s window
         this.maxLogSpeed = 1200;
         // target speed to reach during the initial ramp (keeps game in a playable window)
-        this.logSpeedTarget = Math.min(800, this.maxLogSpeed);
-        // randomized ramp duration between 20s and 30s
-        this.difficultyRampDuration = Phaser.Math.Between(20000, 30000);
+        this.logSpeedTarget = Math.min(960, this.maxLogSpeed); // 800 * 1.2 = 960
+        // randomized ramp duration between 15s and 20s
+        this.difficultyRampDuration = Phaser.Math.Between(15000, 20000);
         var rampTick = 250; // tick every 250ms for smooth increments
         this.difficultyTicks = Math.ceil(this.difficultyRampDuration / rampTick);
         this.difficultyTickIncrease = (this.logSpeedTarget - this.logSpeed) / Math.max(1, this.difficultyTicks);
         this.difficultyTimer = this.time.addEvent({ delay: rampTick, callback: this.increaseDifficulty, callbackScope: this, loop: true });
 
+        // color flash overlay for collision/near-miss feedback
+        this.flashOverlay = this.add.rectangle(0, 0, EPT.world.width, EPT.world.height, 0xff0000, 0);
+        this.flashOverlay.setOrigin(0, 0);
+        this.flashOverlay.setDepth(1000);
+
         this.cameras.main.fadeIn(250);
+    }
+    
+    screenShake(intensity = 5, duration = 200) {
+        this.cameras.main.shake(duration, intensity / 1000);
+    }
+    
+    flashScreen(color = 0xff0000, maxAlpha = 0.5, duration = 200) {
+        if(this.flashOverlay) {
+            this.flashOverlay.setFillStyle(color, maxAlpha);
+            this.tweens.add({ targets: this.flashOverlay, alpha: 0, duration: duration, ease: 'Cubic.easeOut' });
+        }
+    }
+    
+    showSpeedLines() {
+        if(!this.speedLines) return;
+        var lines = this.speedLines.getChildren();
+        for(var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var y = Phaser.Math.Between(100, EPT.world.height - 100);
+            var width = Phaser.Math.Between(150, 400);
+            line.setPosition(-width, y);
+            line.setSize(width, Phaser.Math.Between(2, 4));
+            line.setAlpha(Phaser.Math.FloatBetween(0.6, 0.9));
+            
+            this.tweens.add({
+                targets: line,
+                x: EPT.world.width,
+                duration: Phaser.Math.Between(200, 400),
+                ease: 'Linear',
+                onComplete: () => { line.setAlpha(0); }
+            });
+        }
     }
 
     createTextures() {
@@ -383,9 +461,19 @@ class BeaverGame extends Phaser.Scene {
     spawnLog() {
         if(!this.isRunning) return;
         var now = (this.time && this.time.now) ? this.time.now : Date.now();
+        
+        // check if last 3 logs were all on the same lane - if so, force the other lane
+        var forceLane = null;
+        if(this.laneHistory.length >= 3) {
+            var lastThree = this.laneHistory.slice(-3);
+            if(lastThree[0] === lastThree[1] && lastThree[1] === lastThree[2]) {
+                forceLane = 1 - lastThree[0]; // force opposite lane
+            }
+        }
+        
         // choose lane randomly, but validate distance-based gap vs the last active log in that lane
-        var desiredLane = Phaser.Math.Between(0,1);
-        var candidates = [desiredLane, 1-desiredLane];
+        var desiredLane = forceLane !== null ? forceLane : Phaser.Math.Between(0,1);
+        var candidates = forceLane !== null ? [forceLane] : [desiredLane, 1-desiredLane];
         var chosen = null;
         var spawnY = -40;
         // helper to find the last (closest) active log in a given lane
@@ -470,6 +558,13 @@ class BeaverGame extends Phaser.Scene {
         log.lane = chosen;
         log.scored = false;
         this.logs.add(log);
+        
+        // record lane in history (keep last 10 for tracking)
+        this.laneHistory.push(chosen);
+        if(this.laneHistory.length > 10) {
+            this.laneHistory.shift();
+        }
+        
         // record last spawn for bookkeeping
         this.lastSpawnTimeByLane[chosen] = now;
         this.lastGlobalSpawn = now;
@@ -487,15 +582,20 @@ class BeaverGame extends Phaser.Scene {
             }
         }});
 
-        // add a subtle rotation/tumble tween to the log for animation
-        var rot = Phaser.Math.Between(-12, 12);
-        this.tweens.add({ targets: log, angle: rot, duration: Phaser.Math.Between(400,800), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        // add wobble animation to the log - rotation + slight horizontal sway
+        var rot = Phaser.Math.Between(-15, 15);
+        this.tweens.add({ targets: log, angle: rot, duration: Phaser.Math.Between(300,600), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        
+        // add subtle horizontal wobble for more dynamic movement
+        var sway = Phaser.Math.Between(3, 8);
+        this.tweens.add({ targets: log, x: x + sway, duration: Phaser.Math.Between(400,700), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
         // (collision handled in update loop)
     }
 
     update(time, delta) {
         if(!this.isRunning) return;
+        
         // animate river shimmer: small horizontal wobble + subtle vertical drift
         if(this.riverShimmer || this.bg || this.globalShimmer) {
             var t = time || ((this.time && this.time.now) ? this.time.now : 0);
@@ -524,8 +624,29 @@ class BeaverGame extends Phaser.Scene {
             var log = children[i];
             if(!log.active) continue;
             var logBounds = log.getBounds();
+            
+            // near-miss detection: if log is approaching very close (before it reaches beaver)
+            if(!log.nearMissTriggered) {
+                var verticalDist = Math.abs(log.y - this.beaver.y);
+                var horizontalDist = Math.abs(log.x - this.beaver.x);
+                if(verticalDist < 80 && horizontalDist < 100 && log.y < this.beaver.y - 20) {
+                    log.nearMissTriggered = true;
+                    // brief slow-mo
+                    this.time.timeScale = 0.4;
+                    this.time.delayedCall(400, () => { this.time.timeScale = 1; });
+                    // camera zoom-in
+                    this.cameras.main.zoomTo(1.1, 150, 'Quad.easeOut');
+                    this.time.delayedCall(350, () => {
+                        this.cameras.main.zoomTo(1.0, 200, 'Quad.easeInOut');
+                    });
+                    // speed lines
+                    this.showSpeedLines();
+                }
+            }
+            
             // bounding-box collision
             if(Phaser.Geom.Intersects.RectangleToRectangle(beaverBounds, logBounds)) {
+                this.screenShake(8, 300);
                 this.gameOver();
                 return;
             }
@@ -555,7 +676,19 @@ class BeaverGame extends Phaser.Scene {
         var distance = Math.abs(targetX - startX);
         var duration = 120;
         
-        this.tweens.add({ targets: this.beaver, x: targetX, duration: duration, ease: 'Sine.easeOut' });
+        // squash & stretch animation - anticipation before movement
+        this.beaver.setScale(0.7, 1.3); // squash horizontally, stretch vertically
+        this.tweens.add({ targets: this.beaver, x: targetX, duration: duration, ease: 'Back.easeOut' });
+        this.tweens.add({ 
+            targets: this.beaver, 
+            scaleX: 1.3, 
+            scaleY: 0.7, 
+            duration: duration * 0.6, 
+            ease: 'Back.easeOut',
+            onComplete: () => {
+                this.tweens.add({ targets: this.beaver, scaleX: 1, scaleY: 1, duration: duration * 0.8, ease: 'Elastic.easeOut', elasticity: 300 });
+            }
+        });
         EPT.Sfx.play('click');
 
         // make game a little harder but keep it fair
