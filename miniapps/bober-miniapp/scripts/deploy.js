@@ -1,20 +1,26 @@
 const hre = require('hardhat');
 
 async function main() {
-  console.log('Deploying TipBadge contract...');
+  console.log('Deploying TipBadge contract to Celo...');
+  
+  const [deployer] = await hre.ethers.getSigners();
+  console.log('Deploying with account:', deployer.address);
+  
+  const balance = await hre.ethers.provider.getBalance(deployer.address);
+  console.log('Account balance:', hre.ethers.formatEther(balance), 'CELO');
   
   const TipBadge = await hre.ethers.getContractFactory('TipBadge');
   const contract = await TipBadge.deploy();
   
-  await contract.deployed();
+  await contract.waitForDeployment();
+  const address = await contract.getAddress();
   
-  console.log('TipBadge deployed to:', contract.address);
+  console.log('\n✅ TipBadge deployed to:', address);
   console.log('\nNext steps:');
-  console.log('1. Update CONTRACT_ADDRESS in public/miniapp.js with:', contract.address);
-  console.log('2. Verify contract on explorer (required for ETHGlobal Celo qualification):');
-  console.log('   npx hardhat verify --network celo', contract.address);
-  console.log('3. Fund the deployer address with CELO to cover gas for minting.');
-  console.log('4. Test minting by calling mintBadge from the MiniApp UI.');
+  console.log('1. Update CONTRACT_ADDRESS in public/miniapp.js with:', address);
+  console.log('2. Verify contract on Celo Explorer (REQUIRED for ETHGlobal qualification):');
+  console.log('   npx hardhat verify --network celo', address);
+  console.log('3. Test minting by calling mintBadge from the MiniApp UI.');
 }
 
 main().catch((error) => {

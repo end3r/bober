@@ -1,31 +1,35 @@
-<!doctype html>
+<!DOCTYPE HTML>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Bober MiniApp</title>
-    <style>
-      body { margin:0; font-family: Arial, sans-serif; }
-      #miniapp-ui { position: fixed; right: 12px; top: 12px; z-index: 9999; display:flex; gap:8px; }
-      .btn { background:#1e90ff; color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
-      .btn.secondary { background:#28a745; }
-      .status { position: fixed; left:12px; top:12px; z-index:9999; padding:8px 10px; background:rgba(0,0,0,0.6); color:#fff; border-radius:6px; }
-      iframe#gameframe { border:0; width:100vw; height:100vh; }
-    </style>
-  </head>
-  <body>
-    <div id="miniapp-ui">
-      <div id="connect" class="btn">Connect</div>
-      <div id="tip" class="btn">Tip 0.01 cUSD</div>
-      <div id="mint" class="btn secondary">Mint Badge</div>
-    </div>
-    <div id="status" class="status">Not connected</div>
-
-    <!-- Load the game from local copy -->
-    <iframe id="gameframe" src="game.html" title="Bober Game"></iframe>
-
-    <!-- Ethers from CDN for easy integration; replace with a bundler-based setup in production -->
-    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
-    <script src="miniapp.js"></script>
-  </body>
+<head>
+	<meta charset="utf-8" />
+	<title>Bober River Flow</title>
+	<meta name="author" content="Enclave Games" />
+	<meta name="description" content="Mobile template for web games created using the Phaser game engine." />
+	<meta name="monetization" content="$ilp.uphold.com/k4eJGQUDF9nw" />
+	<style>*{margin:0;padding:0;}body{background: #ccc url(img/pattern.png) repeat; overflow:hidden;}#banner{display:none;}</style>
+	<meta property="og:image" content="https://enclavegames.github.io/Enclave-Phaser-Template/img/enclave-phaser-template.png" />
+	<meta property="og:url" content="https://enclavegames.github.io/Enclave-Phaser-Template/"/>
+	<meta property="og:title" content="Enclave Phaser Template" />
+	<meta property="og:description" content="Mobile template for web games created using the Phaser game engine." />
+	<meta property="og:type" content="website" />
+	<link rel="shortcut icon" href="favicon.ico" />
+	<link rel="manifest" href="ept.webmanifest" />
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-LEW3JXPV5X"></script>
+	<script src="miniapp.js"></script>
+	<script src="src/plugins/webfont.js"></script>
+	<script src="src/phaser.3.80.1.min.js"></script>
+	<script src="src/utils.js"></script>
+	<script src="src/Boot.js"></script>
+	<script src="src/Preloader.js"></script>
+	<script src="src/MainMenu.js"></script>
+	<script src="src/Settings.js"></script>
+	<script src="src/Story.js"></script>
+	<script src="src/BeaverGame.js"></script>
+	<script src="src/Game.js"></script>
+</head>
+<body>
+<img id="banner" src="screens/EPT-MainMenu.png" alt="Enclave Phaser Template" />
+<a href="https://github.com/EnclaveGames/Enclave-Phaser-Template/"><img style="position: absolute; top: 0; right: 0; border: 0;" src="img/fork.png" alt="Fork me on GitHub" /></a>
+<script src="src/start.js"></script>
+</body>
 </html>
